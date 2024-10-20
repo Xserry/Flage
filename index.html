@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gra w odgadywanie flag</title>
+    <style>
+        /* Globalne style */
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f4f7fa;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .dark-mode {
+            background-color: #333;
+            color: #f4f7fa;
+        }
+        .container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .dark-mode .container {
+            background-color: #444;
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        #flag-container {
+            margin: 20px 0;
+        }
+        #flag {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+        input, select {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            outline: none;
+            transition: border-color 0.3s ease;
+        }
+        input:focus, select:focus {
+            border-color: #007bff;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #result {
+            margin-top: 15px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        #streak {
+            margin-top: 10px;
+            font-size: 16px;
+        }
+        #next-btn, #restart-btn {
+            margin-top: 20px;
+            padding: 12px;
+            display: none;
+        }
+        #next-btn {
+            background-color: #28a745;
+        }
+        #next-btn:hover {
+            background-color: #218838;
+        }
+        #restart-btn {
+            background-color: #dc3545;
+        }
+        #restart-btn:hover {
+            background-color: #c82333;
+        }
+        .theme-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        .theme-toggle:hover {
+            background-color: #0056b3;
+        }
+        /* Responsywność */
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+                max-width: 90%;
+            }
+            h1 {
+                font-size: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <button class="theme-toggle" onclick="toggleTheme()">🌓</button>
+    <div class="container">
+        <h1>Odgadnij flagę!</h1>
+        <div id="flag-container">
+            <img id="flag" src="" alt="Flaga kraju">
+        </div>
+        <div>
+            <!-- Kombinowane pole tekstowe i lista rozwijana -->
+            <input list="countries" id="country-input" placeholder="Wpisz lub wybierz nazwę kraju">
+            <datalist id="countries"></datalist>
+        </div>
+        <div id="result"></div>
+        <div id="streak">Licznik poprawnych odpowiedzi z rzędu: 0</div> <!-- Licznik -->
+        <button id="submit-btn">Sprawdź</button>
+        <button id="next-btn">Następna flaga</button>
+        <button id="restart-btn" onclick="restartGame()">Restartuj grę</button>
+    </div>
+    <script>
+        let flags = []; // Zmienna na pobrane flagi z API
+        let currentFlag;
+        let correctStreak = 0; // Licznik poprawnych odpowiedzi z rzędu
+
+        // Funkcja do pobierania flag z API REST Countries
+        function fetchFlags() {
+            fetch('https://restcountries.com/v3.1/all')
+                .then(response => response.json())
+                .then(data => {
+                    flags = data.map(country => ({
+                        country: country.name.common, // Nazwa angielska
+                        flagUrl: country.flags.png // URL do flagi
+                    }));
+                    populateCountryDatalist(); // Wypełnij listę krajów
+                    loadNewFlag(); // Załaduj pierwszą flagę po pobraniu
+                })
+                .catch(error => {
+                    console.error('Błąd podczas pobierania flag:', error);
+                });
+        }
+
+        // Funkcja do wypełniania listy krajów
+        function populateCountryDatalist() {
+            const datalist = document.getElementById('countries');
+            flags.forEach(flag => {
+                const option = document.createElement('option');
+                option.value = flag.country;
+                datalist.appendChild(option);
+            });
+        }
+
+        // Funkcja do losowania i wyświetlania nowej flagi
+        function loadNewFlag() {
+            const randomIndex = Math.floor(Math.random() * flags.length);
+            currentFlag = flags[randomIndex];
+            document.getElementById('flag').src = currentFlag.flagUrl;
+            document.getElementById('country-input').value = ''; // Reset pola tekstowego
+            document.getElementById('result').textContent = '';
+            document.getElementById('next-btn').style.display = 'none';
+        }
+
+        // Funkcja do aktualizacji licznika poprawnych odpowiedzi
+        function updateStreak(isCorrect) {
+            const streakDisplay = document.getElementById('streak');
+            if (isCorrect) {
+                correctStreak++; // Zwiększ licznik
+            } else {
+                correctStreak = 0; // Reset licznika
+            }
+            streakDisplay.textContent = `Licznik poprawnych odpowiedzi z rzędu: ${correctStreak}`;
+        }
+
+        // Funkcja do sprawdzania odpowiedzi
+        document.getElementById('submit-btn').addEventListener('click', function() {
+            const userAnswer = document.getElementById('country-input').value.trim();
+            const result = document.getElementById('result');
+
+            // Sprawdź odpowiedź użytkownika
+            if (userAnswer && userAnswer.toLowerCase() === currentFlag.country.toLowerCase()) {
+                result.textContent = 'Brawo! Dobra odpowiedź.';
+                result.style.color = 'green';
+                updateStreak(true); // Zwiększ licznik poprawnych odpowiedzi
+                document.getElementById('next-btn').style.display = 'block';
+            } else {
+                result.textContent = `Zła odpowiedź! To jest flaga: ${currentFlag.country}`;
+                result.style.color = 'red';
+                updateStreak(false); // Reset licznika poprawnych odpowiedzi
+                document.getElementById('restart-btn').style.display = 'block';
+            }
+        });
+
+        // Załaduj nową flagę po kliknięciu przycisku "Następna flaga"
+        document.getElementById('next-btn').addEventListener('click', loadNewFlag);
+
+        // Funkcja do restartowania gry
+        function restartGame() {
+            correctStreak = 0;
+            updateStreak(false);
+            loadNewFlag();
+            document.getElementById('restart-btn').style.display = 'none';
+        }
+
+        // Funkcja do przełączania motywów
+        function toggleTheme() {
+            document.body.classList.toggle('dark-mode');
+        }
+
+        // Inicjalizacja - pobierz flagi z API przy starcie
+        fetchFlags();
+    </script>
+</body>
+</html>
