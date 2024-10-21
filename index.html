@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="pl">
 <head>
+    <meta charset="viewport" content="width=device-width, initial-scale=1.0">
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gra w odgadywanie flag</title>
     <style>
         /* Globalne style */
@@ -101,20 +101,33 @@
         #restart-btn:hover {
             background-color: #c82333;
         }
+        /* Minimalistyczny przycisk zmiany motywu w rogu ekranu */
         .theme-toggle {
-            position: absolute;
-            top: 20px;
-            right: 20px;
+            position: fixed;
+            top: 10px;
+            right: 10px;
             background-color: #007bff;
             color: white;
             border: none;
-            padding: 10px;
+            padding: 5px;
             border-radius: 50%;
+            font-size: 14px;
             cursor: pointer;
             transition: background-color 0.3s ease;
         }
         .theme-toggle:hover {
             background-color: #0056b3;
+        }
+        /* Menu początkowe */
+        #menu {
+            display: none;
+            text-align: center;
+        }
+        #game {
+            display: none;
+        }
+        .visible {
+            display: block;
         }
         /* Responsywność */
         @media (max-width: 600px) {
@@ -130,7 +143,23 @@
 </head>
 <body>
     <button class="theme-toggle" onclick="toggleTheme()">🌓</button>
-    <div class="container">
+    
+    <!-- Menu początkowe -->
+    <div id="menu" class="container visible">
+        <h1>Wybierz region i rozpocznij grę</h1>
+        <select id="region-select">
+            <option value="all">Cały świat</option>
+            <option value="Africa">Afryka</option>
+            <option value="Americas">Ameryka</option>
+            <option value="Asia">Azja</option>
+            <option value="Europe">Europa</option>
+            <option value="Oceania">Oceania</option>
+        </select>
+        <button id="start-btn">Start</button>
+    </div>
+
+    <!-- Gra -->
+    <div id="game" class="container">
         <h1>Odgadnij flagę!</h1>
         <div id="flag-container">
             <img id="flag" src="" alt="Flaga kraju">
@@ -142,24 +171,32 @@
         </div>
         <div id="result"></div>
         <div id="streak">Licznik poprawnych odpowiedzi z rzędu: 0</div> <!-- Licznik -->
-        <button id="submit-btn">Sprawdź</button>
-        <button id="next-btn">Następna flaga</button>
+        <button id="next-btn" onclick="loadNewFlag()">Następna flaga</button>
         <button id="restart-btn" onclick="restartGame()">Restartuj grę</button>
     </div>
+
     <script>
         let flags = []; // Zmienna na pobrane flagi z API
+        let remainingFlags = []; // Zmienna na flagi, które nie zostały jeszcze odgadnięte
         let currentFlag;
         let correctStreak = 0; // Licznik poprawnych odpowiedzi z rzędu
+        let currentRegion = 'all'; // Aktualnie wybrany region
 
         // Funkcja do pobierania flag z API REST Countries
-        function fetchFlags() {
-            fetch('https://restcountries.com/v3.1/all')
+        function fetchFlags(region = "all") {
+            let url = 'https://restcountries.com/v3.1/all';
+            if (region !== "all") {
+                url = `https://restcountries.com/v3.1/region/${region}`;
+            }
+
+            fetch(url)
                 .then(response => response.json())
                 .then(data => {
                     flags = data.map(country => ({
                         country: country.name.common, // Nazwa angielska
                         flagUrl: country.flags.png // URL do flagi
                     }));
+                    remainingFlags = [...flags]; // Skopiuj wszystkie flagi do listy remainingFlags
                     populateCountryDatalist(); // Wypełnij listę krajów
                     loadNewFlag(); // Załaduj pierwszą flagę po pobraniu
                 })
@@ -171,6 +208,7 @@
         // Funkcja do wypełniania listy krajów
         function populateCountryDatalist() {
             const datalist = document.getElementById('countries');
+            datalist.innerHTML = ''; // Wyczyszczenie listy
             flags.forEach(flag => {
                 const option = document.createElement('option');
                 option.value = flag.country;
@@ -180,8 +218,14 @@
 
         // Funkcja do losowania i wyświetlania nowej flagi
         function loadNewFlag() {
-            const randomIndex = Math.floor(Math.random() * flags.length);
-            currentFlag = flags[randomIndex];
+            if (remainingFlags.length === 0) {
+                endGameWin(); // Jeżeli nie ma już flag do odgadnięcia, zakończ grę
+                return;
+            }
+
+            const randomIndex = Math.floor(Math.random() * remainingFlags.length);
+            currentFlag = remainingFlags[randomIndex];
+            remainingFlags.splice(randomIndex, 1); // Usuń wybraną flagę z listy remainingFlags
             document.getElementById('flag').src = currentFlag.flagUrl;
             document.getElementById('country-input').value = ''; // Reset pola tekstowego
             document.getElementById('result').textContent = '';
@@ -199,9 +243,18 @@
             streakDisplay.textContent = `Licznik poprawnych odpowiedzi z rzędu: ${correctStreak}`;
         }
 
-        // Funkcja do sprawdzania odpowiedzi
-        document.getElementById('submit-btn').addEventListener('click', function() {
-            const userAnswer = document.getElementById('country-input').value.trim();
+        // Funkcja do kończenia gry po wygranej
+        function endGameWin() {
+            const result = document.getElementById('result');
+            result.textContent = `Wygrałeś! Udało ci się zgadnąć wszystkie flagi w regionie: ${currentRegion}`;
+            result.style.color = 'green';
+            document.getElementById('restart-btn').textContent = 'Wybierz inny region';
+            document.getElementById('restart-btn').style.display = 'block';
+        }
+
+        // Funkcja do automatycznego sprawdzania odpowiedzi
+        document.getElementById('country-input').addEventListener('change', function() {
+            const userAnswer = this.value.trim();
             const result = document.getElementById('result');
 
             // Sprawdź odpowiedź użytkownika
@@ -210,23 +263,26 @@
                 result.style.color = 'green';
                 updateStreak(true); // Zwiększ licznik poprawnych odpowiedzi
                 document.getElementById('next-btn').style.display = 'block';
-            } else {
-                result.textContent = `Zła odpowiedź! To jest flaga: ${currentFlag.country}`;
-                result.style.color = 'red';
-                updateStreak(false); // Reset licznika poprawnych odpowiedzi
-                document.getElementById('restart-btn').style.display = 'block';
+            } else if (userAnswer) {
+                endGameLose(); // Wywołaj funkcję końca gry po złej odpowiedzi
             }
         });
 
-        // Załaduj nową flagę po kliknięciu przycisku "Następna flaga"
-        document.getElementById('next-btn').addEventListener('click', loadNewFlag);
+        // Funkcja do kończenia gry po złej odpowiedzi
+        function endGameLose() {
+            const result = document.getElementById('result');
+            result.textContent = 'Koniec gry! Zła odpowiedź. Gra zostanie zrestartowana.';
+            result.style.color = 'red';
+            
+            // Automatyczny reset po 3 sekundach
+            setTimeout(restartGame, 3000);
+        }
 
         // Funkcja do restartowania gry
         function restartGame() {
             correctStreak = 0;
-            updateStreak(false);
-            loadNewFlag();
-            document.getElementById('restart-btn').style.display = 'none';
+            document.getElementById('game').style.display = 'none';
+            document.getElementById('menu').style.display = 'block';
         }
 
         // Funkcja do przełączania motywów
@@ -234,8 +290,17 @@
             document.body.classList.toggle('dark-mode');
         }
 
-        // Inicjalizacja - pobierz flagi z API przy starcie
-        fetchFlags();
+        // Funkcja startowa gry
+        document.getElementById('start-btn').addEventListener('click', function() {
+            const selectedRegion = document.getElementById('region-select').value;
+            currentRegion = selectedRegion; // Zapisz aktualnie wybrany region
+            fetchFlags(selectedRegion);
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('game').style.display = 'block';
+        });
+
+        // Inicjalizacja - pokaż menu startowe
+        document.getElementById('menu').style.display = 'block';
     </script>
 </body>
 </html>
